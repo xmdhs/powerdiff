@@ -260,6 +260,23 @@ $('collapseBtn').onclick = () => {
 };
 $('exportBtn').onclick = () => download(`/api/export?scheme=${encodeURIComponent(state.activeScheme || 'active')}`);
 $('scriptBtn').onclick = () => download(`/api/script?scheme=${encodeURIComponent(state.activeScheme || 'active')}`);
+$('exportDiffBtn').onclick = async () => {
+  if (!state.diffTarget) {
+    showMessage('请先选择对比目标', 'error');
+    return;
+  }
+  const url = state.diffTarget === 'default'
+    ? `/api/diff/${encodeURIComponent(state.activeScheme || 'active')}`
+    : `/api/diff/${encodeURIComponent(state.activeScheme || 'active')}?compare=${encodeURIComponent(state.diffTarget)}`;
+  const items = await api(url);
+  const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `diff-${state.activeScheme}-${state.diffTarget === 'default' ? 'default' : state.diffTarget}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showMessage('对比结果已导出为 JSON');
+};
 $('filterInput').oninput = debounce(renderSettings, 150);
 $('showHidden').onchange = renderSettings;
 
