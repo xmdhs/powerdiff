@@ -1,1 +1,10 @@
-powerweb.exe
+# 构建产物
+dist/
+*.exe
+*.test
+*.out
+
+# Go 缓存与覆盖率
+/vendor/
+coverage.out
+coverage.html

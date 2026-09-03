@@ -1,0 +1,116 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag（例如 v0.1.0，必须以 v 开头）'
+        required: true
+        type: string
+      title:
+        description: 'Release 标题（留空则使用 tag）'
+        required: false
+        type: string
+      prerelease:
+        description: '标记为预发布版本'
+        required: false
+        default: false
+        type: boolean
+      draft:
+        description: '创建为草稿（先不公开）'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 校验 tag 格式
+        run: |
+          if ! [[ "${{ inputs.tag }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::tag 格式非法：${{ inputs.tag }}，期望形如 v0.1.0 / v1.2.3-beta.1"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: 检查 tag 是否已存在
+        run: |
+          if git rev-parse "${{ inputs.tag }}" >/dev/null 2>&1; then
+            echo "::error::tag ${{ inputs.tag }} 已存在，请换一个版本号"
+            exit 1
+          fi
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: 构建 Windows 二进制
+        env:
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          LDFLAGS="-s -w"
+
+          # Web UI（含内嵌前端静态资源）
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerweb-windows-amd64.exe ./cmd/powerweb
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerweb-windows-arm64.exe ./cmd/powerweb
+
+          # CLI（对比当前方案与默认值差异）
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerdiff-windows-amd64.exe .
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerdiff-windows-arm64.exe .
+
+          ls -lh dist
+          (cd dist && sha256sum *.exe > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: 'dist/*'
+
+      - name: 发布到 GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag }}
+          name: ${{ inputs.title || inputs.tag }}
+          draft: ${{ inputs.draft }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          files: |
+            dist/powerweb-windows-amd64.exe
+            dist/powerweb-windows-arm64.exe
+            dist/powerdiff-windows-amd64.exe
+            dist/powerdiff-windows-arm64.exe
+            dist/SHA256SUMS.txt
+          body: |
+            ## 下载
+
+            | 文件 | 说明 |
+            | ---- | ---- |
+            | `powerweb-windows-amd64.exe` | Web 可视化管理工具（推荐，x64） |
+            | `powerweb-windows-arm64.exe` | Web 可视化管理工具（ARM64） |
+            | `powerdiff-windows-amd64.exe` | 命令行对比工具（x64） |
+            | `powerdiff-windows-arm64.exe` | 命令行对比工具（ARM64） |
+            | `SHA256SUMS.txt` | 校验和 |
+
+            > 构建来源可验证：本 Release 的二进制文件附带 Sigstore build provenance attestation，
+            > 可在 Release 页面或仓库 Attestations 中查看。
