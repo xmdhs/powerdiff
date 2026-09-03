@@ -70,17 +70,10 @@ jobs:
           mkdir -p dist
           LDFLAGS="-s -w"
 
-          # Web UI（含内嵌前端静态资源）
           GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerweb-windows-amd64.exe ./cmd/powerweb
           GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerweb-windows-arm64.exe ./cmd/powerweb
 
-          # CLI（对比当前方案与默认值差异）
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerdiff-windows-amd64.exe .
-          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/powerdiff-windows-arm64.exe .
-
           ls -lh dist
-          (cd dist && sha256sum *.exe > SHA256SUMS.txt)
-          cat dist/SHA256SUMS.txt
 
       - name: Attest build provenance
         uses: actions/attest@v4
@@ -98,19 +91,13 @@ jobs:
           files: |
             dist/powerweb-windows-amd64.exe
             dist/powerweb-windows-arm64.exe
-            dist/powerdiff-windows-amd64.exe
-            dist/powerdiff-windows-arm64.exe
-            dist/SHA256SUMS.txt
           body: |
             ## 下载
 
             | 文件 | 说明 |
             | ---- | ---- |
-            | `powerweb-windows-amd64.exe` | Web 可视化管理工具（推荐，x64） |
+            | `powerweb-windows-amd64.exe` | Web 可视化管理工具（x64） |
             | `powerweb-windows-arm64.exe` | Web 可视化管理工具（ARM64） |
-            | `powerdiff-windows-amd64.exe` | 命令行对比工具（x64） |
-            | `powerdiff-windows-arm64.exe` | 命令行对比工具（ARM64） |
-            | `SHA256SUMS.txt` | 校验和 |
 
             > 构建来源可验证：本 Release 的二进制文件附带 Sigstore build provenance attestation，
             > 可在 Release 页面或仓库 Attestations 中查看。
